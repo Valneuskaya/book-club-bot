@@ -1,4 +1,4 @@
-import html, json, os, re, urllib.request
+import difflib, html, json, os, re, urllib.request
 from collections import Counter
 from http.server import BaseHTTPRequestHandler
 
@@ -34,6 +34,10 @@ def norm(s):
     return str(s).lower().replace("ё", "е")
 
 
+def tokens(s):
+    return re.findall(r"[a-zа-я0-9]+", norm(s))
+
+
 # ---------- каталог: читаем из той же страницы, что открывает Mini App ----------
 def parse(page):
     mk = json.loads(re.search(r"const MK=(\{.*?\});", page, re.S).group(1))
@@ -59,15 +63,15 @@ def load():
 
 # ---------- /search ----------
 def search_text(books, query):
-    words = norm(query).split()
+    words = tokens(query)
     if not words:
         return ("Напиши, что искать: название, автор, жанр, страна или место действия.\n"
                 "Например: <code>/search Этвуд</code> или <code>/search антиутопия</code>")
     found = []
     for b in books:
-        hay = norm(" ".join([b["t"], b["a"], b["tags"], " ".join(b["g"]),
-                             cname(b["c"]), b["place"], str(b["y"])]))
-        if all(w in hay for w in words):
+        hay = tokens(" ".join([b["t"], b["a"], b["tags"], " ".join(b["g"]),
+                               cname(b["c"]), b["place"], str(b["y"])]))
+        if all(any(t.startswith(w) for t in hay) for w in words):
             found.append(b)
     if not found:
         return "Ничего не нашлось по запросу «%s»." % esc(query)
@@ -160,6 +164,9 @@ def open_button():
                                   "web_app": {"url": APP_URL}}]]}
 
 
+KNOWN = ["/start", "/search", "/stats", "/help"]
+
+
 def handle(msg):
     chat = (msg.get("chat") or {}).get("id")
     text = (msg.get("text") or "").strip()
@@ -171,6 +178,14 @@ def handle(msg):
         cmd, _, arg = text.partition(" ")
         cmd = cmd.split("@")[0].lower()
         arg = arg.strip()
+        if cmd not in KNOWN:
+            close = difflib.get_close_matches(cmd, KNOWN, n=1, cutoff=0.7)
+            if close:
+                cmd = close[0]  # опечатка вроде /seach
+            else:
+                if private:
+                    send(chat, "Не знаю такой команды. Доступны: /search, /stats, /start, /help.")
+                return
     elif private:
         cmd, arg = "/search", text  # обычное сообщение в личке = поиск
     else:
@@ -207,4 +222,3 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:  # всегда отвечаем 200, иначе Telegram будет повторять запрос
             print("error:", e)
         self._ok()
-
