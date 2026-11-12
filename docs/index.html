@@ -322,11 +322,12 @@ function bookRow(b){
   return '<div class="book"><span class="dot" style="background:'+GENRES[b.gs[0]]+'"></span>'+b.t+'<br><i>'+b.a+(b.c?' · '+nm(b.c):'')+(year?'':' · '+b.y)+'</i><br><i>'+b.tg+'</i></div>';
 }
 function drawSearch(){
-  const q=norm($('q').value).trim().split(/\s+/).filter(Boolean);
+  const tok=s=>s.split(/[^a-zа-я0-9]+/).filter(Boolean);
+  const q=tok(norm($('q').value));
   const clean=s=>s.replace(/[«»„“"]/g,'');
   const res=BOOKS.filter(b=>{
     const s=norm([b.t,b.a,b.tg,b.gs.join(' '),b.c?nm(b.c):'',b.pl,b.y].join(' '));
-    return q.every(w=>s.includes(w));
+    const T=tok(s);return q.every(w=>T.some(x=>x.startsWith(w)));
   }).sort((x,y)=>clean(x.t).localeCompare(clean(y.t),'ru'));
   $('qn').textContent=q.length?(res.length?'Найдено: '+pl(res.length):'Ничего не найдено'):'Все книги: '+pl(res.length)+'. Начни вводить, чтобы отфильтровать.';
   $('qres').innerHTML=res.map(bookRow).join('');
