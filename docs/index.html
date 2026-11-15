@@ -385,30 +385,43 @@ function drawStats(){
 /* ---------- карточка книги ---------- */
 // ключ Google Books: вставь между кавычками (без ключа поиск обложек не работает)
 const GB_KEY='AIzaSyAtQG0ZU9uIIcc_fD6Kr2oIwbbG7bMDAL4';
+// как фамилии авторов пишутся латиницей в Google Books (для поиска издания на языке оригинала)
+const AU={'Макконахи':['mcconaghy'],'Куанг':['kuang'],'Сафон':['zafon'],'Ханимен':['honeyman'],'Готтлиб':['gottlieb'],'Рейд':['reid'],'Мураками':['murakami','村上'],'Михаэлидес':['michaelides'],'Мориарти':['moriarty'],'Фейн':['fein'],'Уинман':['winman'],'Кристи':['christie'],'Энглер':['engler'],'Эгер':['eger'],'Пелт':['pelt'],'Алексиевич':['alexievich','aleksievich','alexijevich','alexievitch'],'Бакман':['backman'],'Айтматов':['aitmatov','aitmatow'],'Рассел':['russell'],'Кронин':['cronin'],'Набоков':['nabokov'],'Шафак':['shafak'],'Итурбе':['iturbe'],'Кэмерон':['cameron'],'Уайтхед':['whitehead'],'Мжаванадзе':['mzhavanadze'],'Ломбардо':['lombardo'],'Хейг':['haig'],'Тилье':['thilliez'],'Ханна':['hannah'],'Кинг':['king'],'Мортон':['morton'],'Хичкок':['hitchcock'],'Хигасигава':['higashigawa','東川'],'Бергман':['bergman'],'Перрен':['perrin'],'Кукафка':['kukafka'],'Этвуд':['atwood'],'Тартт':['tartt'],'Ньюджент':['nugent'],'Зевин':['zevin'],'Эдвардс':['edwards'],'Мие':['lee','미예'],'Гейман':['gaiman'],'Розен':['rosen'],'Абгарян':['abgaryan','abgarian'],'Пиколт':['picoult'],'Миллер':['miller'],'Бэннер':['banner'],'Берк':['burke'],'Пилчер':['pilcher']};
+const fold=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const flat=s=>fold(s).replace(/[^a-zа-я0-9\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]+/g,'');
 async function coverFor(b){
   if(b.cv)return {u:b.cv,st:'вписана вручную'};
-  const key='cv2:'+b.t;let c=null;
+  const key='cv3:'+b.t;let c=null;
   try{c=localStorage.getItem(key)}catch(e){}
   if(c)return c==='-'?{u:'',st:'не найдена (запомнено)'}:{u:c,st:'найдена'};
-  const sn=b.a.split(' ').pop().toLowerCase(),ti=b.t.replace(/[«»„“"]/g,'');
-  const tries=['intitle:'+ti+' inauthor:'+b.a.split(' ').pop(),ti+' '+b.a];
+  const sur=b.a.split(' ').pop(),lat=AU[sur]||[];
+  const keys=[sur.toLowerCase(),...lat.map(fold)];
+  const ti=b.t.replace(/[«»„“"]/g,''),ot=(b.ot||'').split(' (')[0];
+  const tries=[
+    {q:'intitle:'+ti+' inauthor:'+sur,lr:'&langRestrict=ru',t:ti,n:''},
+    {q:ti+' '+b.a,lr:'&langRestrict=ru',t:ti,n:''}];
+  if(ot)tries.push(
+    {q:'intitle:'+ot+' inauthor:'+(lat[0]||sur),lr:'',t:ot,n:' (издание на языке оригинала)'},
+    {q:ot+' '+(lat[0]||b.a),lr:'',t:ot,n:' (издание на языке оригинала)'});
   let st='нет ответа',err=false;
-  for(const q of tries){
+  for(const T of tries){
     try{
       const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),6000);
-      const r=await fetch('https://www.googleapis.com/books/v1/volumes?q='+encodeURIComponent(q)+'&langRestrict=ru&printType=books&maxResults=10'+(GB_KEY?'&key='+GB_KEY:''),{signal:ctl.signal});
+      const r=await fetch('https://www.googleapis.com/books/v1/volumes?q='+encodeURIComponent(T.q)+T.lr+'&printType=books&maxResults=10'+(GB_KEY?'&key='+GB_KEY:''),{signal:ctl.signal});
       clearTimeout(tm);
       if(!r.ok){st='ошибка '+r.status;err=true;continue}
-      const items=(await r.json()).items||[];
+      const items=(await r.json()).items||[],want=flat(T.t);
       for(const it of items){
         const v=it.volumeInfo||{};
-        if((v.authors||[]).join(' ').toLowerCase().includes(sn)&&v.imageLinks){
+        const au=fold((v.authors||[]).join(' ')),tt=flat(v.title);
+        const okA=keys.some(k=>au.includes(k)),okT=want.length>3&&tt&&(tt.includes(want)||(tt.length>5&&want.includes(tt)));
+        if(okA&&okT&&v.imageLinks){
           const u=(v.imageLinks.thumbnail||v.imageLinks.smallThumbnail).replace('http:','https:');
           try{localStorage.setItem(key,u)}catch(e){}
-          return {u,st:'найдена'};
+          return {u,st:'найдена'+T.n};
         }
       }
-      st=items.length?'найдено '+items.length+', но без подходящего автора или картинки':'ничего не найдено';
+      st=items.length?'найдено '+items.length+', но нет подходящей книги с обложкой':'ничего не найдено';
     }catch(e){st='ошибка сети: '+((e&&e.message)||e);err=true}
   }
   if(!err){try{localStorage.setItem(key,'-')}catch(e){}}
