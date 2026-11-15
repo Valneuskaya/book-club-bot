@@ -383,25 +383,36 @@ function drawStats(){
 }
 
 /* ---------- карточка книги ---------- */
+// ключ Google Books: вставь между кавычками (без ключа поиск обложек не работает)
+const GB_KEY='AIzaSyAtQG0ZU9uIIcc_fD6Kr2oIwbbG7bMDAL4';
 async function coverFor(b){
-  if(b.cv)return b.cv;
-  const key='cv:'+b.t;let c=null;
+  if(b.cv)return {u:b.cv,st:'вписана вручную'};
+  const key='cv2:'+b.t;let c=null;
   try{c=localStorage.getItem(key)}catch(e){}
-  if(c)return c==='-'?'':c;
-  let u='';
-  try{
-    const sn=b.a.split(' ').pop().toLowerCase(),ctl=new AbortController();
-    setTimeout(()=>ctl.abort(),6000);
-    const q='intitle:'+b.t.replace(/[«»„“"]/g,'')+' inauthor:'+b.a.split(' ').pop();
-    const r=await fetch('https://www.googleapis.com/books/v1/volumes?q='+encodeURIComponent(q)+'&langRestrict=ru&printType=books&maxResults=5',{signal:ctl.signal});
-    const j=await r.json();
-    for(const it of (j.items||[])){
-      const v=it.volumeInfo||{};
-      if((v.authors||[]).join(' ').toLowerCase().includes(sn)&&v.imageLinks){u=(v.imageLinks.thumbnail||v.imageLinks.smallThumbnail).replace('http:','https:');break}
-    }
-    try{localStorage.setItem(key,u||'-')}catch(e){}
-  }catch(e){}
-  return u;
+  if(c)return c==='-'?{u:'',st:'не найдена (запомнено)'}:{u:c,st:'найдена'};
+  const sn=b.a.split(' ').pop().toLowerCase(),ti=b.t.replace(/[«»„“"]/g,'');
+  const tries=['intitle:'+ti+' inauthor:'+b.a.split(' ').pop(),ti+' '+b.a];
+  let st='нет ответа',err=false;
+  for(const q of tries){
+    try{
+      const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),6000);
+      const r=await fetch('https://www.googleapis.com/books/v1/volumes?q='+encodeURIComponent(q)+'&langRestrict=ru&printType=books&maxResults=10'+(GB_KEY?'&key='+GB_KEY:''),{signal:ctl.signal});
+      clearTimeout(tm);
+      if(!r.ok){st='ошибка '+r.status;err=true;continue}
+      const items=(await r.json()).items||[];
+      for(const it of items){
+        const v=it.volumeInfo||{};
+        if((v.authors||[]).join(' ').toLowerCase().includes(sn)&&v.imageLinks){
+          const u=(v.imageLinks.thumbnail||v.imageLinks.smallThumbnail).replace('http:','https:');
+          try{localStorage.setItem(key,u)}catch(e){}
+          return {u,st:'найдена'};
+        }
+      }
+      st=items.length?'найдено '+items.length+', но без подходящего автора или картинки':'ничего не найдено';
+    }catch(e){st='ошибка сети: '+((e&&e.message)||e);err=true}
+  }
+  if(!err){try{localStorage.setItem(key,'-')}catch(e){}}
+  return {u:'',st};
 }
 function closeCard(){$('sheet').classList.remove('on')}
 $('sheet').onclick=e=>{if(e.target===$('sheet'))closeCard()};
@@ -420,15 +431,19 @@ function openCard(b){
   $('sheet').innerHTML='<div><div class="chead"><div class="cover" id="cv" style="background:'+col+'">'+b.t+'</div><div style="min-width:0"><p class="ct">'+b.t+'</p>'+(b.ot?'<p class="co">'+b.ot+'</p>':'')+'<p class="'+(multi?'ca':'cn')+'" id="ca">'+b.a+'</p><div class="gchips">'+b.gs.map(g=>'<span data-g="'+g+'" style="background:'+(GENRES[g]||'#888')+'">'+g+'</span>').join('')+'</div></div></div>'+
    '<div class="facts">'+f('Где издана',b.c?flag(b.c)+' '+nm(b.c):'')+f('Первое издание',b.fy)+f('Язык оригинала',b.lg)+f('Читали',b.y)+'</div>'+
    (b.pl?'<div class="facts" style="grid-template-columns:1fr"><div><small>Место действия</small>'+b.pl+'</div></div>':'')+
-   '<p class="hint" style="margin-top:10px">'+b.tg+'</p>'+
+   '<p class="hint" style="margin-top:10px">'+b.tg+'</p>'+'<p class="hint" id="cst" style="margin-top:4px">Обложка: ищу…</p>'+
    '<div class="cbtn"><button id="cb2">'+(b.sc.length?'📍 На карте':'🌍 На карте')+'</button><button id="cx">Закрыть</button></div></div>';
   $('sheet').classList.add('on');
   const byAuthor=()=>{closeCard();showPanel('✍️ '+b.a,ALL.filter(x=>x.a===b.a))};
   if(multi)$('ca').onclick=byAuthor;$('cb2').onclick=()=>mapTo(b);$('cx').onclick=closeCard;
   $('sheet').querySelectorAll('.gchips span').forEach(s=>s.onclick=()=>{closeCard();showPanel(s.dataset.g,ALL.filter(x=>x.gs.includes(s.dataset.g)))});
-  coverFor(b).then(u=>{
+  coverFor(b).then(({u,st})=>{
+    const s=$('cst');if(s)s.textContent='Обложка: '+st;
     const cv=$('cv');if(!u||!cv)return;
-    const im=new Image();im.alt=b.t;im.onload=()=>{if($('cv')===cv){cv.innerHTML='';cv.style.padding='0';cv.appendChild(im)}};im.src=u;
+    const im=new Image();im.alt=b.t;
+    im.onload=()=>{if($('cv')===cv){cv.innerHTML='';cv.style.padding='0';cv.appendChild(im)}};
+    im.onerror=()=>{if($('cst'))$('cst').textContent='Обложка: ссылка не открылась'};
+    im.src=u;
   });
 }
 document.addEventListener('click',e=>{const r=e.target.closest('.book[data-i]');if(r)openCard(ALL[+r.dataset.i])});
