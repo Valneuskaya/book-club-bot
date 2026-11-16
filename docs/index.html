@@ -383,8 +383,8 @@ function drawStats(){
 }
 
 /* ---------- карточка книги ---------- */
-// ключ Google Books: вставь между кавычками (без ключа поиск обложек не работает)
-const GB_KEY='AIzaSyAtQG0ZU9uIIcc_fD6Kr2oIwbbG7bMDAL4';
+// ключ Google Books (возможно добавить после для автоматического поиска обложек)
+const GB_KEY='';
 // как фамилии авторов пишутся латиницей в Google Books (для поиска издания на языке оригинала)
 const AU={'Макконахи':['mcconaghy'],'Куанг':['kuang'],'Сафон':['zafon'],'Ханимен':['honeyman'],'Готтлиб':['gottlieb'],'Рейд':['reid'],'Мураками':['murakami','村上'],'Михаэлидес':['michaelides'],'Мориарти':['moriarty'],'Фейн':['fein'],'Уинман':['winman'],'Кристи':['christie'],'Энглер':['engler'],'Эгер':['eger'],'Пелт':['pelt'],'Алексиевич':['alexievich','aleksievich','alexijevich','alexievitch'],'Бакман':['backman'],'Айтматов':['aitmatov','aitmatow'],'Рассел':['russell'],'Кронин':['cronin'],'Набоков':['nabokov'],'Шафак':['shafak'],'Итурбе':['iturbe'],'Кэмерон':['cameron'],'Уайтхед':['whitehead'],'Мжаванадзе':['mzhavanadze'],'Ломбардо':['lombardo'],'Хейг':['haig'],'Тилье':['thilliez'],'Ханна':['hannah'],'Кинг':['king'],'Мортон':['morton'],'Хичкок':['hitchcock'],'Хигасигава':['higashigawa','東川'],'Бергман':['bergman'],'Перрен':['perrin'],'Кукафка':['kukafka'],'Этвуд':['atwood'],'Тартт':['tartt'],'Ньюджент':['nugent'],'Зевин':['zevin'],'Эдвардс':['edwards'],'Мие':['lee','미예'],'Гейман':['gaiman'],'Розен':['rosen'],'Абгарян':['abgaryan','abgarian'],'Пиколт':['picoult'],'Миллер':['miller'],'Бэннер':['banner'],'Берк':['burke'],'Пилчер':['pilcher']};
 const fold=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
