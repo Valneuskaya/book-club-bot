@@ -306,11 +306,24 @@ WEEKDAYS = ["понедельник", "вторник", "среда", "четв�
 NO_DATE = "Дата следующей встречи пока не назначена."
 
 
+MONTH_PREFIX = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
+
+
 def parse_date(s):
-    s = (s or "").strip().split(" ")[0]
-    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%d.%m.%y", "%d-%m-%Y"):
+    s = (s or "").strip()
+    m = re.fullmatch(r"(\d{1,2})\s+([А-Яа-яЁё]+)\.?,?\s+(\d{4})(?:\s.*)?", s)  # «14 декабря 2026», «14 дек. 2026»
+    if m:
+        p = m.group(2).lower()[:3]
+        p = "мая" if p == "май" else p
+        if p in MONTH_PREFIX:
+            try:
+                return datetime.date(int(m.group(3)), MONTH_PREFIX.index(p) + 1, int(m.group(1)))
+            except ValueError:
+                return None
+    first = s.split(" ")[0]
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%d.%m.%y", "%d-%m-%Y", "%m/%d/%Y"):
         try:
-            return datetime.datetime.strptime(s, fmt).date()
+            return datetime.datetime.strptime(first, fmt).date()
         except ValueError:
             pass
     return None
@@ -325,16 +338,26 @@ def days_word(n):
 
 def next_text(today=None):
     if not SHEET_NEXT_CSV:
-        return NO_DATE
+        return "Вкладка «Встреча» не подключена: в Vercel нет переменной SHEET_NEXT_CSV."
     try:
         rows = list(csv.reader(io.StringIO(fetch(SHEET_NEXT_CSV))))
     except Exception as e:
         print("next failed:", e)
-        return "Не получилось загрузить дату встречи. Попробуй чуть позже."
-    d = parse_date(rows[1][0] if len(rows) > 1 and rows[1] else "")
+        return "Не получилось загрузить вкладку «Встреча». Проверь ссылку или попробуй чуть позже."
     today = today or (datetime.datetime.utcnow() + datetime.timedelta(hours=TZ_HOURS)).date()
-    if not d or d < today:
+    dates = []
+    for row in rows[:10]:          # ищем даты в любых ячейках первых строк
+        for cell in row:
+            d = parse_date(cell)
+            if d:
+                dates.append(d)
+    if not dates:
+        return ("В таблице не нашлось ни одной даты. Напиши её в ячейку, например 2026-12-14. "
+                "Первые ячейки, которые я увидела: " + esc(" | ".join(c for r in rows[:3] for c in r)[:150]))
+    future = [d for d in dates if d >= today]
+    if not future:
         return NO_DATE
+    d = min(future)
     n = (d - today).days
     when = "сегодня!" if n == 0 else "завтра" if n == 1 else "через %d %s" % (n, days_word(n))
     return "📅 Следующая встреча: <b>%d %s %d, %s</b>\n%s" % (
