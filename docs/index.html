@@ -73,6 +73,7 @@ svg .g{cursor:pointer}
 .cbtn{display:flex;gap:8px;margin-top:10px}
 .cbtn button{flex:1;padding:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;font:inherit;font-size:14px;cursor:pointer}
 </style>
+<script src="config.js"></script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>(function(){var t=window.Telegram&&Telegram.WebApp;if(!t)return;t.ready();t.expand();try{t.disableVerticalSwipes()}catch(e){}
 function a(){var d=t.colorScheme==="dark";document.documentElement.setAttribute("data-theme",d?"dark":"light");try{t.setHeaderColor(d?"#1d1916":"#faf6ef");t.setBackgroundColor(d?"#1d1916":"#faf6ef")}catch(e){}}
@@ -81,7 +82,8 @@ a();t.onEvent("themeChanged",a)})();</script>
 <body>
 <main>
 <h1>📚 Наш книжный клуб</h1>
-<p class="sub"><span id="per"></span> — <span id="cnt"></span></p>
+<p class="sub"><span id="per">Загружаю…</span> — <span id="cnt"></span></p>
+<p class="hint" id="warn" hidden></p>
 <div class="tabs"><button id="t1" class="on">🌍 Карта</button><button id="t2">🧠 Жанры</button><button id="t3">🔎 Поиск</button><button id="t4">📊 Итоги</button></div>
 <div class="years" id="years"></div>
 
@@ -121,6 +123,49 @@ a();t.onEvent("themeChanged",a)})();</script>
 // [название, автор, код страны (ISO), "твои жанры через запятую", "жанры для майнд-мэпа буквами"]
 // Буквы: С современная · П психологическая · Т триллер/детектив · И историческая · Ф фэнтези/фантастика · Н нон-фикшн · Д семейная/социальная драма · А антиутопия · К классика
 // Новый год: добавь, например, 2027:[ ... ] в DATA. Страна = где книга впервые издана (или как решит клуб)
+(async function(){
+/* ---------- данные из Google Таблицы (если подключена в config.js) ---------- */
+function csvParse(t){
+  const rows=[];let row=[],cur='',q=false;
+  for(let i=0;i<t.length;i++){const c=t[i];
+    if(q){if(c==='"'){if(t[i+1]==='"'){cur+='"';i++}else q=false}else cur+=c}
+    else if(c==='"')q=true;
+    else if(c===','){row.push(cur);cur=''}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;row.push(cur);cur='';if(row.some(x=>x!==''))rows.push(row);row=[]}
+    else cur+=c}
+  row.push(cur);if(row.some(x=>x!==''))rows.push(row);
+  return rows;
+}
+function sheetToData(rows,warn){
+  if(!rows||rows.length<2)return null;
+  const nz=s=>String(s||'').trim().toLowerCase().replace(/ё/g,'е');
+  const rev={};
+  try{const d2=new Intl.DisplayNames(['ru'],{type:'region'});Object.keys(WORLD.paths).forEach(c=>{try{rev[nz(d2.of(c))]=c}catch(e){}})}catch(e){}
+  Object.assign(rev,{'сша':'US','америка':'US','англия':'GB','шотландия':'GB','уэльс':'GB','британия':'GB','великобритания':'GB','корея':'KR','южная корея':'KR','кыргызстан':'KG','киргизия':'KG','белоруссия':'BY','беларусь':'BY','юар':'ZA'});
+  const gl={};Object.entries(MK).forEach(([k,v])=>{gl[nz(v)]=k});
+  const D={};
+  rows.slice(1).forEach((r,i)=>{
+    const [y,t,a,c,tg,gr,pl,sc,ot,fy,lg,cv]=[...r,...Array(12)].slice(0,12).map(x=>(x||'').trim());
+    if(!t||!/^\d{4}$/.test(y))return;
+    const n=i+2;
+    const cc=s=>{if(!s)return '';if(rev[nz(s)])return rev[nz(s)];if(/^[A-Za-z]{2}$/.test(s)&&WORLD.paths[s.toUpperCase()])return s.toUpperCase();warn.push('строка '+n+': страна «'+s+'»');return ''};
+    const letters=gr.split(/[;,]/).map(x=>x.trim()).filter(Boolean).map(x=>{const k=gl[nz(x)]||(MK[x]?x:'');if(!k)warn.push('строка '+n+': жанр «'+x+'»');return k}).join('');
+    if(!letters)warn.push('строка '+n+': не указаны группы жанров');
+    const codes=sc.split(/[;,]/).map(x=>cc(x.trim())).filter(Boolean).join(',');
+    (D[y]=D[y]||[]).push([t.startsWith('«')?t:'«'+t+'»',a,cc(c),tg,letters,pl,codes,ot,fy?+fy:'',lg,cv?(/[\/.]/.test(cv)?cv:'covers/'+cv+'.jpg'):'']);
+  });
+  return Object.keys(D).length?D:null;
+}
+let SHEETROWS=null;
+if(window.SHEET_BOOKS){
+  try{
+    const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),3500);
+    const r=await fetch(window.SHEET_BOOKS,{signal:ctl.signal});clearTimeout(tm);
+    if(r.ok){SHEETROWS=csvParse(await r.text());try{localStorage.setItem('sheetcsv',JSON.stringify(SHEETROWS))}catch(e){}}
+  }catch(e){}
+  if(!SHEETROWS){try{SHEETROWS=JSON.parse(localStorage.getItem('sheetcsv')||'null')}catch(e){}}
+}
+
 const MK={"С": "Современная проза", "П": "Психологическая проза", "Т": "Триллер и детектив", "И": "Историческая проза", "Ф": "Фэнтези и фантастика", "Н": "Нон-фикшн и мемуары", "Д": "Семейная и социальная драма", "А": "Антиутопия", "К": "Классика"};
 const DATA={2024:[
 ["«Миграции»", "Шарлотта Макконахи", "AU", "климатическая фантастика, современная психологическая проза", "ФСП", "Гренландия, Исландия и Ирландия (путь к Антарктике)", "GL,IS,IE", "Migrations", 2020, "английский", "covers/migrations.jpg"],
@@ -178,16 +223,17 @@ const DATA={2024:[
 ["«Цирцея»", "Мадлен Миллер", "US", "мифологическое фэнтези (ретеллинг греческих мифов)", "Ф", "Остров Эя и Греция (мифологическая)", "GR", "Circe", 2018, "английский", "covers/circe.jpg"],
 ["«Дом на краю ночи»", "Кэтрин Бэннер", "GB", "семейная сага, исторический роман", "ДИ", "Вымышленный остров Кастелламаре у Сицилии", "IT", "The House at the Edge of Night", 2016, "английский", "covers/house-at-edge-of-night.jpg"],
 ["«Былое»", "Каро Клэр Берк", "US", "современный психологический триллер с элементами сатиры", "ТПС", "США", "US", "Yesteryear", 2026, "английский", "covers/yesteryear.jpg"],
-["«Сентябрь»", "Розамунда Пилчер", "GB", "семейная сага (сентиментальная семейная проза)", "Д", "Шотландия и Англия", "GB", "September", 1990, "английский", "covers/september.jpg"],
-["«Наедине с собой»", "Кристин Ханна", "US", "семейная сага и психологический роман", "ДП", "США", "US", "Great Alone", 2018, "английский", "covers/great-alone.jpg"]
+["«Сентябрь»", "Розамунда Пилчер", "GB", "семейная сага (сентиментальная семейная проза)", "Д", "Шотландия и Англия", "GB", "September", 1990, "английский", "covers/september.jpg"]
 ]};
+const WARN=[];
+if(SHEETROWS){const D2=sheetToData(SHEETROWS,WARN);if(D2){for(const k in DATA)delete DATA[k];Object.assign(DATA,D2)}}
 const ALL=Object.entries(DATA).flatMap(([y,l])=>l.map(([t,a,c,tg,m,pl,sc,ot,fy,lg,cv])=>({t,a,c,tg,gs:[...m].map(k=>MK[k]),y:+y,pl:pl||'',sc:sc?sc.split(','):[],ot:ot||'',fy:fy||'',lg:lg||'',cv:cv||''})));
 const YEARS=Object.keys(DATA).map(Number).sort();
 ALL.forEach((b,i)=>b.i=i);
 let BOOKS=ALL;
 
 const GENRES={"Современная проза": "#b5533c", "Психологическая проза": "#8a4b6b", "Триллер и детектив": "#6a6aa0", "Историческая проза": "#c0763a", "Фэнтези и фантастика": "#5b8a5b", "Нон-фикшн и мемуары": "#3f8f8a", "Семейная и социальная драма": "#a08a3a", "Антиутопия": "#4f6f8f", "Классика": "#8a6f4a"};
-const NAMES={US:"США"};
+const NAMES={US:"США",KR:"Южная Корея"};
 const $=id=>document.getElementById(id);
 const flag=c=>String.fromCodePoint(...[...c].map(x=>127397+x.charCodeAt(0)));
 let dn=null;try{dn=new Intl.DisplayNames(["ru"],{type:"region"})}catch(e){}
@@ -358,6 +404,47 @@ $('q').oninput=drawSearch;
 /* ---------- итоги ---------- */
 const srt=m=>Object.entries(m).sort((x,y)=>y[1]-x[1]||x[0].localeCompare(y[0],'ru'));
 const bars=(rows,max)=>rows.map(([l,n,col])=>'<div class="bar"><span>'+l+'</span><span class="bt"><i style="width:'+Math.max(4,n/max*100)+'%;background:'+(col||'var(--accent)')+'"></i></span><b>'+n+'</b></div>').join('');
+function wrapped(){
+  const B=BOOKS;if(!B.length)return '';
+  const cnt=a=>{const m={};a.forEach(x=>{m[x]=(m[x]||0)+1});return Object.entries(m).sort((x,y)=>y[1]-x[1])};
+  const uniq=a=>[...new Set(a.filter(Boolean))];
+  const topG=L=>{const r=cnt(L.flatMap(b=>b.gs));return r.length?r[0][0]:'—'};
+  const yw=n=>{const m=n%100,d=n%10;return (m>10&&m<15)?'лет':d===1?'год':(d>1&&d<5)?'года':'лет'};
+  const ds=(n,p)=>n>p?'+'+(n-p):n<p?'−'+(p-n):'без изменений';
+  const L=[];
+  if(year&&year>YEARS[0]){
+    const Pv=ALL.filter(b=>b.y===year-1),pv=year-1;
+    if(Pv.length){
+      const row=(l,n,p)=>L.push('📈 '+l+': <b>'+n+'</b> (в '+pv+': '+p+', '+ds(n,p)+')');
+      row('Книг',B.length,Pv.length);
+      row('Стран издания',uniq(B.map(b=>b.c)).length,uniq(Pv.map(b=>b.c)).length);
+      row('Языков оригинала',uniq(B.map(b=>b.lg)).length,uniq(Pv.map(b=>b.lg)).length);
+      const g1=topG(B),g0=topG(Pv);
+      L.push('🏷 Любимый жанр: <b>'+g1+'</b>'+(g1===g0?' (тот же, что в '+pv+')':' (в '+pv+': '+g0+')'));
+    }
+  }
+  const old=B.filter(b=>b.fy).sort((x,y)=>x.fy-y.fy);
+  if(old.length){
+    const o=old[0],n=old[old.length-1],age=Math.round(old.reduce((s,b)=>s+(b.y-b.fy),0)/old.length);
+    L.push('🕰 Самая старая книга: <b>'+o.t+'</b> ('+o.fy+')');
+    L.push('🆕 Самая свежая: <b>'+n.t+'</b> ('+n.fy+')'+(n.fy===n.y?', вышла в год чтения':''));
+    L.push('📆 Средний возраст книги на момент чтения: <b>'+age+' '+yw(age)+'</b>');
+  }
+  const lg=uniq(B.map(b=>b.lg));
+  if(lg.length)L.push('🗣 Языков оригинала: <b>'+lg.length+'</b> ('+lg.join(', ')+')');
+  const sc=cnt(B.flatMap(b=>b.sc));
+  if(sc.length)L.push('📍 Стран, где происходят истории: <b>'+sc.length+'</b>, чаще всего '+flag(sc[0][0])+' '+nm(sc[0][0])+' ('+sc[0][1]+')');
+  const fic=B.filter(b=>/вымышл|мифолог/i.test(b.pl)).length;
+  if(fic)L.push('✨ Книг про вымышленные или мифологические места: <b>'+fic+'</b>');
+  const au=cnt(B.map(b=>b.a)).filter(x=>x[1]>1);
+  if(au.length)L.push('✍️ Автор, которого читали не один раз: '+au.map(x=>'<b>'+x[0]+'</b> ('+x[1]+')').join(', '));
+  if(!year){
+    const by=cnt(ALL.map(b=>b.y))[0];
+    L.push('🏆 Больше всего книг прочитали в <b>'+by[0]+'</b> году: '+by[1]);
+    L.push('📚 Любимый жанр по годам: '+YEARS.map(y=>y+' — '+topG(ALL.filter(b=>b.y===y))).join('; '));
+  }
+  return L.length?'<h3>'+(year?'Итоги '+year:'Рекорды клуба')+'</h3>'+L.map(x=>'<div class="yr">'+x+'</div>').join(''):'';
+}
 function drawStats(){
   const B=BOOKS,el=$('stats');
   if(!B.length){el.innerHTML='<p class="hint">Пока нет книг за этот период.</p>';return}
@@ -368,6 +455,7 @@ function drawStats(){
   const first={};ALL.forEach(b=>{if(b.c&&(!first[b.c]||b.y<first[b.c]))first[b.c]=b.y});
   let s='<div class="kpis">'+[[B.length,'книг'],[Object.keys(au).length,'авторов'],[cs.length,'стран'],[gn.length,'жанров']].map(([n,t])=>'<div><b>'+n+'</b><span>'+t+'</span></div>').join('')+'</div>';
   s+='<p class="sub2">'+(cs.length?'Любимая страна: <b>'+flag(cs[0][0])+' '+nm(cs[0][0])+'</b> ('+cs[0][1]+'). ':'')+'Любимый жанр: <b>'+gn[0][0]+'</b> ('+gn[0][1]+').'+(ta[0][1]>1?' Чаще всего читали: <b>'+ta[0][0]+'</b> ('+ta[0][1]+').':'')+'</p>';
+  s+=wrapped();
   if(year&&year>YEARS[0]){
     const nw=cs.map(x=>x[0]).filter(c=>first[c]===year);
     s+='<p class="sub2">Новые страны ('+year+'): '+(nw.length?nw.map(c=>flag(c)+' '+nm(c)).join(', '):'нет')+'.</p>';
@@ -431,6 +519,9 @@ function tab(n){
 }
 [1,2,3,4].forEach(i=>$("t"+i).onclick=()=>tab(i));
 setYear();
+const wn=$('warn');
+if(wn&&WARN.length){wn.hidden=false;wn.textContent='В таблице не распознано: '+WARN.slice(0,4).join('; ')+(WARN.length>4?'…':'')}
+})();
 </script>
 </body>
 </html>

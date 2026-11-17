@@ -1,10 +1,13 @@
-import difflib, html, json, os, re, urllib.request
+import csv, datetime, difflib, html, io, json, os, re, urllib.request
 from collections import Counter
 from http.server import BaseHTTPRequestHandler
 
 TOKEN = os.environ.get("BOT_TOKEN", "")
 APP_URL = os.environ.get("APP_URL", "")
 MINIAPP_LINK = os.environ.get("MINIAPP_LINK", "")  # необязательно: t.me/бот/bookmap, для кнопки в группах
+SHEET_BOOKS_CSV = os.environ.get("SHEET_BOOKS_CSV", "")  # опубликованная вкладка с книгами (CSV)
+SHEET_NEXT_CSV = os.environ.get("SHEET_NEXT_CSV", "")    # опубликованная вкладка «Встреча» (CSV)
+TZ_HOURS = int(os.environ.get("TZ_HOURS", "3"))  # часовой пояс клуба относительно UTC
 
 COUNTRIES = {
     "US": "США", "GB": "Великобритания", "IE": "Ирландия", "FR": "Франция",
@@ -16,7 +19,25 @@ COUNTRIES = {
     "NO": "Норвегия", "GR": "Греция", "IT": "Италия", "CN": "Китай",
     "IN": "Индия", "BR": "Бразилия", "MX": "Мексика", "UA": "Украина",
     "NL": "Нидерланды", "CZ": "Чехия", "FI": "Финляндия", "DK": "Дания",
+    "ZA": "ЮАР", "EG": "Египет", "NG": "Нигерия", "KE": "Кения", "MA": "Марокко",
+    "DZ": "Алжир", "TN": "Тунис", "ET": "Эфиопия", "IL": "Израиль", "IR": "Иран",
+    "IQ": "Ирак", "SA": "Саудовская Аравия", "PK": "Пакистан", "BD": "Бангладеш",
+    "TH": "Таиланд", "ID": "Индонезия", "PH": "Филиппины", "MY": "Малайзия",
+    "SG": "Сингапур", "NZ": "Новая Зеландия", "CL": "Чили", "CO": "Колумбия",
+    "PE": "Перу", "VE": "Венесуэла", "CU": "Куба", "UY": "Уругвай", "CH": "Швейцария",
+    "BE": "Бельгия", "PT": "Португалия", "HU": "Венгрия", "RO": "Румыния",
+    "BG": "Болгария", "RS": "Сербия", "HR": "Хорватия", "SI": "Словения",
+    "LT": "Литва", "LV": "Латвия", "EE": "Эстония", "KZ": "Казахстан",
+    "UZ": "Узбекистан", "AZ": "Азербайджан", "MD": "Молдова", "CY": "Кипр",
+    "MT": "Мальта", "LU": "Люксембург", "TW": "Тайвань", "KP": "Северная Корея",
+    "MN": "Монголия", "NP": "Непал", "LK": "Шри-Ланка", "GH": "Гана", "SN": "Сенегал",
+    "AL": "Албания", "BA": "Босния и Герцеговина", "ME": "Черногория", "MK": "Северная Македония",
+    "LB": "Ливан", "SY": "Сирия", "JO": "Иордания", "AF": "Афганистан",
 }
+NAME2CODE = {n.lower().replace("ё", "е"): c for c, n in COUNTRIES.items()}
+NAME2CODE.update({"сша": "US", "америка": "US", "англия": "GB", "шотландия": "GB",
+                  "уэльс": "GB", "британия": "GB", "корея": "KR", "республика корея": "KR",
+                  "кыргызстан": "KG", "белоруссия": "BY"})
 
 
 def flag(code):
@@ -42,7 +63,7 @@ def tokens(s):
 # ---------- каталог: читаем из той же страницы, что открывает Mini App ----------
 def parse(page):
     mk = json.loads(re.search(r"const MK=(\{.*?\});", page, re.S).group(1))
-    body = re.search(r"const DATA=\{(.*?)\};\s*const ALL", page, re.S).group(1)
+    body = re.search(r"const DATA=\{(.*?)\};\s*const (?:WARN|ALL)", page, re.S).group(1)
     body = re.sub(r'(?<![\w"])(\d{4}):\[', r'"\1":[', body)
     data = json.loads("{" + body + "}")
     books = []
@@ -58,9 +79,52 @@ def parse(page):
     return books
 
 
+def fetch(url):
+    with urllib.request.urlopen(url, timeout=8) as r:
+        return r.read().decode("utf-8-sig")
+
+
+def to_code(s):
+    s = (s or "").strip()
+    if not s:
+        return ""
+    k = s.lower().replace("ё", "е")
+    if k in NAME2CODE:
+        return NAME2CODE[k]
+    if re.fullmatch(r"[A-Za-z]{2}", s):
+        return s.upper()
+    print("страна не распознана:", s)
+    return ""
+
+
+def parse_sheet(text):
+    """Книги из опубликованной Google Таблицы (те же столбцы, что читает приложение)."""
+    rows = list(csv.reader(io.StringIO(text)))
+    books = []
+    for r in rows[1:]:
+        r = [x.strip() for x in r] + [""] * (12 - len(r))
+        y, t, a, c, tags, gr, place, _sc, ot, fy, lg, cv = r[:12]
+        if not t or not re.fullmatch(r"\d{4}", y):
+            continue
+        books.append({
+            "i": len(books), "t": t if t.startswith("«") else "«%s»" % t, "a": a,
+            "c": to_code(c), "tags": tags, "y": int(y),
+            "g": [g.strip() for g in re.split(r"[;,]", gr) if g.strip()],
+            "place": place, "ot": ot, "fy": fy, "lg": lg,
+            "cv": cv if ("/" in cv or "." in cv or not cv) else "covers/%s.jpg" % cv,
+        })
+    return books
+
+
 def load():
-    with urllib.request.urlopen(APP_URL, timeout=8) as r:
-        return parse(r.read().decode("utf-8"))
+    if SHEET_BOOKS_CSV:
+        try:
+            books = parse_sheet(fetch(SHEET_BOOKS_CSV))
+            if books:
+                return books
+        except Exception as e:
+            print("таблица недоступна, берём страницу:", e)
+    return parse(fetch(APP_URL))
 
 
 # ---------- Telegram ----------
@@ -235,8 +299,50 @@ def stats_text(books, arg):
     return "\n".join(lines)
 
 
+# ---------- /next: дата ближайшей встречи (из вкладки «Встреча» в Таблице) ----------
+MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа",
+          "сентября", "октября", "ноября", "декабря"]
+WEEKDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
+NO_DATE = "Дата следующей встречи пока не назначена."
+
+
+def parse_date(s):
+    s = (s or "").strip().split(" ")[0]
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%d.%m.%y", "%d-%m-%Y"):
+        try:
+            return datetime.datetime.strptime(s, fmt).date()
+        except ValueError:
+            pass
+    return None
+
+
+def days_word(n):
+    m, d = n % 100, n % 10
+    if 10 < m < 15:
+        return "дней"
+    return "день" if d == 1 else "дня" if 1 < d < 5 else "дней"
+
+
+def next_text(today=None):
+    if not SHEET_NEXT_CSV:
+        return NO_DATE
+    try:
+        rows = list(csv.reader(io.StringIO(fetch(SHEET_NEXT_CSV))))
+    except Exception as e:
+        print("next failed:", e)
+        return "Не получилось загрузить дату встречи. Попробуй чуть позже."
+    d = parse_date(rows[1][0] if len(rows) > 1 and rows[1] else "")
+    today = today or (datetime.datetime.utcnow() + datetime.timedelta(hours=TZ_HOURS)).date()
+    if not d or d < today:
+        return NO_DATE
+    n = (d - today).days
+    when = "сегодня!" if n == 0 else "завтра" if n == 1 else "через %d %s" % (n, days_word(n))
+    return "📅 Следующая встреча: <b>%d %s %d, %s</b>\n%s" % (
+        d.day, MONTHS[d.month - 1], d.year, WEEKDAYS[d.weekday()], when.capitalize())
+
+
 # ---------- обработка сообщений ----------
-KNOWN = ["/start", "/search", "/stats", "/help"]
+KNOWN = ["/start", "/search", "/stats", "/next", "/help"]
 
 
 def handle(msg):
@@ -256,7 +362,7 @@ def handle(msg):
                 cmd = close[0]  # опечатка вроде /seach
             else:
                 if private:
-                    send(chat, "Не знаю такой команды. Доступны: /search, /stats, /start, /help.")
+                    send(chat, "Не знаю такой команды. Доступны: /search, /stats, /next, /start, /help.")
                 return
     elif private:
         cmd, arg = "/search", text  # обычное сообщение в личке = поиск
@@ -272,8 +378,11 @@ def handle(msg):
         do_search(chat, load() if tokens(arg) else [], arg, private)
     elif cmd == "/stats":
         send(chat, stats_text(load(), arg), markup_of([[app_button(private)]]))
+    elif cmd == "/next":
+        send(chat, next_text())
     elif cmd == "/help":
         send(chat, "/search слово — найти книгу, автора или жанр\n"
+                   "/next — дата следующей встречи\n"
                    "/stats — итоги по всем годам, <code>/stats 2025</code> — по году\n"
                    "/start — открыть карту")
 
