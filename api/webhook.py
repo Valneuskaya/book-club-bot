@@ -170,7 +170,7 @@ def card_text(b):
         lines.append("🗓 Первое издание: %s" % esc(b["fy"]))
     if b["lg"]:
         lines.append("🗣 Язык оригинала: %s" % esc(b["lg"]))
-    lines.append("📅 Читали: %d" % b["y"])
+    lines.append("📅 Прочитано в %d году" % b["y"])
     if b["place"]:
         lines.append("📍 Место действия: %s" % esc(b["place"]))
     if b["tags"]:
@@ -216,8 +216,7 @@ def find(books, query):
 def list_text(found):
     lines = ["Найдено: %d. Нажми на книгу, чтобы открыть карточку." % len(found), ""]
     for b in found[:10]:
-        lines.append("%s <b>%s</b>\n%s · %s · %d" % (
-            flag(b["c"]), esc(b["t"]), esc(b["a"]), esc(cname(b["c"])), b["y"]))
+        lines.append("<b>%s</b>\n%s\nпрочитано в %d году" % (esc(b["t"]), esc(b["a"]), b["y"]))
         lines.append("")
     if len(found) > 10:
         lines.append("…и ещё %d. Уточни запрос." % (len(found) - 10))
