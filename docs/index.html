@@ -4,12 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Книжный клуб: карта чтения</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Merriweather:wght@700;900&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#faf6ef;--surface:#fff;--ink:#2b2420;--muted:#7a6e64;--accent:#b5533c;--line:#e6dccd;--land:#e7dccb;--sea:#f1ece2;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#1d1916;--surface:#2a2420;--ink:#f1e9df;--muted:#a89b8d;--accent:#e0836a;--line:#3d342d;--land:#4a4038;--sea:#241f1b}}
-:root[data-theme="dark"]{color-scheme:dark;--bg:#1d1916;--surface:#2a2420;--ink:#f1e9df;--muted:#a89b8d;--accent:#e0836a;--line:#3d342d;--land:#4a4038;--sea:#241f1b}
+:root{--bg:#F4F1EA;--surface:#fff;--ink:#382110;--muted:#6b6258;--accent:#409D69;--link:#00635D;--line:#D8D8D8;--land:#D9D6CD;--sea:#EEF3F0;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#1b1612;--surface:#272019;--ink:#F2ECE4;--muted:#A89F94;--accent:#5FBF8A;--link:#6CCBC2;--line:#3a322a;--land:#3d372f;--sea:#1f2420}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#1b1612;--surface:#272019;--ink:#F2ECE4;--muted:#A89F94;--accent:#5FBF8A;--link:#6CCBC2;--line:#3a322a;--land:#3d372f;--sea:#1f2420}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 Georgia,"Times New Roman",serif}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 Lato,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:760px;margin:0 auto;padding:20px 16px 40px}
 h1{font-size:24px;margin:0 0 4px}
 .sub{color:var(--muted);font-size:14px;margin:0 0 16px}
@@ -46,7 +49,7 @@ h1{font-size:24px;margin:0 0 4px}
 .hint{color:var(--muted);font-size:13px;margin:8px 2px 0}
 .chip{display:inline-block;border:1px solid var(--line);border-radius:12px;padding:1px 9px;font-size:12px;color:var(--muted);margin-left:6px;white-space:nowrap}
 .unk{margin-top:8px;border:1px dashed var(--muted);background:transparent;color:var(--ink);border-radius:10px;padding:6px 12px;font:inherit;font-size:14px;cursor:pointer}
-svg text{font-family:Georgia,serif;pointer-events:none}
+svg text{font-family:Lato,system-ui,sans-serif;pointer-events:none}
 svg .g{cursor:pointer}
 #panel{margin-top:14px;padding:12px}
 #panel h2{font-size:17px;margin:0 0 8px}
@@ -72,16 +75,24 @@ svg .g{cursor:pointer}
 .facts small{display:block;color:var(--muted);font-size:12px}
 .cbtn{display:flex;gap:8px;margin-top:10px}
 .cbtn button{flex:1;padding:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;font:inherit;font-size:14px;cursor:pointer}
+h1,.ct,#panel h2,#stats h3,.kpis b{font-family:'Merriweather',Georgia,serif}
+h1{font-size:26px;font-weight:900;text-transform:lowercase;letter-spacing:-.4px;margin:0 0 2px}
+.card{border-radius:8px}
+.tabs button,.years button,.mapmode button,.cbtn button{border-radius:20px}
+.zoom button{border-radius:6px}
+.ca{color:var(--link)}
+.cbtn button#cb2{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+.tabs button{font-weight:700}
 </style>
 <script src="config.js"></script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>(function(){var t=window.Telegram&&Telegram.WebApp;if(!t)return;t.ready();t.expand();try{t.disableVerticalSwipes()}catch(e){}
-function a(){var d=t.colorScheme==="dark";document.documentElement.setAttribute("data-theme",d?"dark":"light");try{t.setHeaderColor(d?"#1d1916":"#faf6ef");t.setBackgroundColor(d?"#1d1916":"#faf6ef")}catch(e){}}
+function a(){var d=t.colorScheme==="dark";document.documentElement.setAttribute("data-theme",d?"dark":"light");try{t.setHeaderColor(d?"#1b1612":"#F4F1EA");t.setBackgroundColor(d?"#1b1612":"#F4F1EA")}catch(e){}}
 a();t.onEvent("themeChanged",a)})();</script>
 </head>
 <body>
 <main>
-<h1>📚 Наш книжный клуб</h1>
+<h1>наш книжный клуб</h1>
 <p class="sub"><span id="per">Загружаю…</span> — <span id="cnt"></span></p>
 <p class="hint" id="warn" hidden></p>
 <div class="tabs"><button id="t1" class="on">🌍 Карта</button><button id="t2">🧠 Жанры</button><button id="t3">🔎 Поиск</button><button id="t4">📊 Итоги</button></div>
