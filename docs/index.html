@@ -95,6 +95,7 @@ a();t.onEvent("themeChanged",a)})();</script>
 <h1>наш книжный клуб</h1>
 <p class="sub"><span id="per">Загружаю…</span> — <span id="cnt"></span></p>
 <p class="hint" id="warn" hidden></p>
+<p class="sub" id="next" hidden></p>
 <div class="tabs"><button id="t1" class="on">🌍 Карта</button><button id="t2">🧠 Жанры</button><button id="t3">🔎 Поиск</button><button id="t4">📊 Итоги</button></div>
 <div class="years" id="years"></div>
 
@@ -532,6 +533,36 @@ function tab(n){
 setYear();
 const wn=$('warn');
 if(wn&&WARN.length){wn.hidden=false;wn.textContent='В таблице не распознано: '+WARN.slice(0,4).join('; ')+(WARN.length>4?'…':'')}
+
+/* ---------- дата следующей встречи (вкладка «Встреча», ссылка в config.js: window.SHEET_NEXT) ---------- */
+(async function loadNext(){
+  const el=$('next');if(!el||!window.SHEET_NEXT)return;
+  try{
+    const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),4000);
+    const r=await fetch(window.SHEET_NEXT,{signal:ctl.signal});clearTimeout(tm);
+    if(!r.ok)return;
+    const rows=csvParse(await r.text());
+    const MP=['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+    const MS=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+    const WD=['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+    const pd=s=>{
+      s=(s||'').trim();let m=s.match(/^(\d{1,2})\s+([А-Яа-яЁё]+)\.?,?\s+(\d{4})/);
+      if(m){let p=m[2].toLowerCase().slice(0,3);if(p==='май')p='мая';const i=MP.indexOf(p);if(i>=0)return new Date(+m[3],i,+m[1])}
+      const f=s.split(' ')[0];
+      if((m=f.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)))return new Date(+m[1],+m[2]-1,+m[3]);
+      if((m=f.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/))){let a=+m[1],b=+m[2],y=+m[3];if(y<100)y+=2000;if(b>12&&a<=12)[a,b]=[b,a];return new Date(y,b-1,a)}
+      return null;
+    };
+    const t0=new Date();t0.setHours(0,0,0,0);
+    const ds=[];
+    rows.slice(0,10).forEach(row=>row.forEach(c=>{const d=pd(c);if(d&&!isNaN(d)&&d>=t0)ds.push(d)}));
+    if(!ds.length)return;
+    const d=new Date(Math.min(...ds)),n=Math.round((d-t0)/864e5);
+    const w=n===0?'сегодня':n===1?'завтра':'через '+n+' '+((n%100>10&&n%100<15)?'дней':n%10===1?'день':(n%10>1&&n%10<5)?'дня':'дней');
+    el.innerHTML='📅 Следующая встреча: <b>'+d.getDate()+' '+MS[d.getMonth()]+', '+WD[d.getDay()]+'</b> · '+w;
+    el.hidden=false;
+  }catch(e){}
+})();
 })();
 </script>
 </body>
