@@ -398,7 +398,7 @@ function drawMind(){
 /* ---------- поиск ---------- */
 const norm=s=>String(s).toLowerCase().replace(/ё/g,'е');
 function bookRow(b){
-  return '<div class="book" data-i="'+b.i+'"><span class="dot" style="background:'+GENRES[b.gs[0]]+'"></span>'+b.t+'<br><i>'+b.a+(b.c?' · '+nm(b.c):'')+(year?'':' · '+b.y)+'</i><br><i>'+b.tg+'</i></div>';
+  return '<div class="book" data-i="'+b.i+'"><span class="dot" style="background:'+GENRES[b.gs[0]]+'"></span>'+b.t+'<br><i>'+b.a+'</i><br><i>прочитано в '+b.y+' году</i></div>';
 }
 function drawSearch(){
   const tok=s=>s.split(/[^a-zа-я0-9]+/).filter(Boolean);
@@ -499,7 +499,7 @@ function openCard(b){
   const multi=ALL.filter(x=>x.a===b.a).length>1;
   const f=(l,v)=>v?'<div><small>'+l+'</small>'+v+'</div>':'';
   $('sheet').innerHTML='<div><div class="chead"><div class="cover" id="cv" style="background:'+col+'">'+b.t+'</div><div style="min-width:0"><p class="ct">'+b.t+'</p>'+(b.ot?'<p class="co">'+b.ot+'</p>':'')+'<p class="'+(multi?'ca':'cn')+'" id="ca">'+b.a+'</p><div class="gchips">'+b.gs.map(g=>'<span data-g="'+g+'" style="background:'+(GENRES[g]||'#888')+'">'+g+'</span>').join('')+'</div></div></div>'+
-   '<div class="facts">'+f('Где издана',b.c?flag(b.c)+' '+nm(b.c):'')+f('Первое издание',b.fy)+f('Язык оригинала',b.lg)+f('Читали',b.y)+'</div>'+
+   '<div class="facts">'+f('Где издана',b.c?flag(b.c)+' '+nm(b.c):'')+f('Первое издание',b.fy)+f('Язык оригинала',b.lg)+f('Прочитано в',b.y+' году')+'</div>'+
    (b.pl?'<div class="facts" style="grid-template-columns:1fr"><div><small>Место действия</small>'+b.pl+'</div></div>':'')+
    '<p class="hint" style="margin-top:10px">'+b.tg+'</p>'+
    '<div class="cbtn"><button id="cb2">'+(b.sc.length?'📍 На карте':'🌍 На карте')+'</button><button id="cx">Закрыть</button></div></div>';
